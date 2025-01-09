@@ -5,56 +5,130 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>To-Do List with Timer</title>
     <style>
+        :root {
+            --bg-color: #f5f5f5;
+            --text-color: #333;
+            --card-bg: white;
+            --card-border: #e0e0e0;
+            --item-bg: #f8f9fa;
+            --item-border: #e9ecef;
+            --hover-shadow: rgba(0, 0, 0, 0.15);
+            --input-border: #ced4da;
+            --heading-color: #212529;
+            --remove-btn-color: #dc3545;
+            --remove-btn-hover-bg: #fee2e2;
+            --active-task-bg: #e3f2fd;
+        }
+
         body {
             font-family: Arial, sans-serif;
             margin: 20px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
         }
+
         .container {
             display: flex;
             gap: 20px;
         }
+
         .todo-list, .timer {
-            border: 2px solid #ccc;
+            border: 2px solid var(--card-border);
             padding: 20px;
-            border-radius: 5px;
+            border-radius: 8px;
             width: 45%;
+            background: var(--card-bg);
+            box-shadow: 0 2px 4px var(--hover-shadow);
         }
+
         .todo-item {
             padding: 10px;
             margin: 5px 0;
-            background: #f4f4f4;
-            border: 1px solid #ddd;
+            background: var(--item-bg);
+            border: 1px solid var(--item-border);
+            border-radius: 5px;
             cursor: grab;
-        }
-        .todo-item.dragging {
-            opacity: 0.5;
-        }
-        .timer {
             display: flex;
-            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .todo-item.active {
+            background: var(--active-task-bg);
+            border-color: #90caf9;
+        }
+
+        .todo-item.completed {
+            background: #e8f5e9;
+            text-decoration: line-through;
+            opacity: 0.7;
+        }
+
+        .timer-controls {
+            margin: 20px 0;
+            display: flex;
+            gap: 10px;
             align-items: center;
             justify-content: center;
-            height: 200px;
-            background: #f9f9f9;
         }
-        .timer input {
-            width: 100px;
-            padding: 5px;
-            margin: 10px;
+
+        .timer-display {
+            font-size: 2.5em;
+            margin: 15px 0;
+            font-family: monospace;
             text-align: center;
         }
-        button {
-            padding: 10px 20px;
-            margin-top: 10px;
+
+        .timer-list {
+            margin-top: 15px;
+            padding: 10px;
+            border: 1px solid var(--item-border);
+            border-radius: 5px;
+            background: var(--item-bg);
+            width: 100%;
+            min-height: 100px;
+        }
+
+        .remove-btn {
+            color: var(--remove-btn-color);
             border: none;
-            background: #007bff;
+            background: none;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 5px 10px;
+        }
+
+        .remove-btn:hover {
+            background: var(--remove-btn-hover-bg);
+            border-radius: 4px;
+        }
+
+        input[type="text"], input[type="number"] {
+            padding: 8px;
+            margin-right: 10px;
+            border: 1px solid var(--input-border);
+            border-radius: 4px;
+        }
+
+        button {
+            padding: 8px 16px;
+            background-color: #007bff;
             color: white;
+            border: none;
             border-radius: 5px;
             cursor: pointer;
+            margin: 2px;
         }
+
         button:disabled {
-            background: #ccc;
+            background-color: #ccc;
             cursor: not-allowed;
+        }
+
+        .complete-btn {
+            background-color: #28a745;
+            padding: 4px 8px;
+            font-size: 0.9em;
         }
     </style>
 </head>
@@ -63,77 +137,191 @@
     <div class="container">
         <div class="todo-list">
             <h2>To-Do List</h2>
-            <div class="todo-item" draggable="true">Task 1</div>
-            <div class="todo-item" draggable="true">Task 2</div>
-            <div class="todo-item" draggable="true">Task 3</div>
+            <div>
+                <input id="new-task" type="text" placeholder="Add new task">
+                <button id="add-task">Add Task</button>
+            </div>
+            <div id="todo-items"></div>
         </div>
         <div class="timer">
             <h2>Timer</h2>
-            <p id="selected-task">Drag a task here</p>
-            <input type="number" id="timer-input" placeholder="Time (sec)" disabled>
-            <button id="start-button" disabled>Start Timer</button>
+            <div id="timer-display" class="timer-display">00:00</div>
+            <div class="timer-controls">
+                <input id="timer-input" type="number" placeholder="Minutes" min="1">
+                <button id="start-button">Start</button>
+                <button id="pause-button" disabled>Pause</button>
+                <button id="reset-button" disabled>Reset</button>
+            </div>
+            <div id="timer-list" class="timer-list"></div>
         </div>
     </div>
 
-    <audio id="alarm-sound" src="https://www.soundjay.com/button/beep-07.wav"></audio>
-
     <script>
-        const todoItems = document.querySelectorAll('.todo-item');
-        const timerArea = document.querySelector('.timer');
-        const selectedTask = document.getElementById('selected-task');
+        const todoItemsContainer = document.getElementById('todo-items');
+        const timerList = document.getElementById('timer-list');
+        const timerDisplay = document.getElementById('timer-display');
         const timerInput = document.getElementById('timer-input');
         const startButton = document.getElementById('start-button');
-        const alarmSound = document.getElementById('alarm-sound');
+        const pauseButton = document.getElementById('pause-button');
+        const resetButton = document.getElementById('reset-button');
 
         let draggedItem = null;
+        let timerInterval = null;
+        let timeLeft = 0;
+        let isPaused = false;
 
-        todoItems.forEach(item => {
-            item.addEventListener('dragstart', () => {
-                draggedItem = item;
-                item.classList.add('dragging');
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+
+        function startTimer() {
+            if (!isPaused) {
+                timeLeft = parseInt(timerInput.value) * 60 || 0;
+                if (timeLeft <= 0) return;
+            }
+            isPaused = false;
+            
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                if (timeLeft > 0) {
+                    timeLeft--;
+                    timerDisplay.textContent = formatTime(timeLeft);
+                } else {
+                    clearInterval(timerInterval);
+                    alert('Timer finished!');
+                    resetTimer();
+                }
+            }, 1000);
+
+            startButton.disabled = true;
+            pauseButton.disabled = false;
+            resetButton.disabled = false;
+            timerInput.disabled = true;
+        }
+
+        function pauseTimer() {
+            clearInterval(timerInterval);
+            isPaused = true;
+            startButton.disabled = false;
+            pauseButton.disabled = true;
+        }
+
+        function resetTimer() {
+            clearInterval(timerInterval);
+            timeLeft = 0;
+            isPaused = false;
+            timerDisplay.textContent = '00:00';
+            startButton.disabled = false;
+            pauseButton.disabled = true;
+            resetButton.disabled = true;
+            timerInput.disabled = false;
+        }
+
+        function createTask(taskName) {
+            const task = document.createElement('div');
+            task.textContent = taskName;
+            task.classList.add('todo-item');
+            task.draggable = true;
+
+            task.addEventListener('dragstart', (e) => {
+                draggedItem = task;
+                e.dataTransfer.setData('text/plain', taskName);
+                setTimeout(() => task.classList.add('dragging'), 0);
             });
 
-            item.addEventListener('dragend', () => {
-                item.classList.remove('dragging');
+            task.addEventListener('dragend', () => {
+                task.classList.remove('dragging');
+                draggedItem = null;
             });
-        });
 
-        timerArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-        });
+            const removeButton = document.createElement('button');
+            removeButton.textContent = '×';
+            removeButton.classList.add('remove-btn');
+            removeButton.addEventListener('click', () => task.remove());
+            task.appendChild(removeButton);
 
-        timerArea.addEventListener('drop', () => {
-            if (draggedItem) {
-                selectedTask.textContent = draggedItem.textContent;
-                timerInput.disabled = false;
-                startButton.disabled = true;
+            return task;
+        }
+
+        function createTimerItem(taskName) {
+            const item = document.createElement('div');
+            item.classList.add('todo-item');
+            
+            const taskText = document.createElement('span');
+            taskText.textContent = taskName;
+            item.appendChild(taskText);
+
+            const controls = document.createElement('div');
+            controls.style.display = 'flex';
+            controls.style.gap = '5px';
+
+            const completeBtn = document.createElement('button');
+            completeBtn.textContent = '✓';
+            completeBtn.classList.add('complete-btn');
+            completeBtn.addEventListener('click', () => {
+                item.classList.toggle('completed');
+            });
+
+            const removeBtn = document.createElement('button');
+            removeBtn.textContent = '×';
+            removeBtn.classList.add('remove-btn');
+            removeBtn.addEventListener('click', () => {
+                item.remove();
+                if (timerList.children.length === 0) {
+                    resetTimer();
+                }
+            });
+
+            controls.appendChild(completeBtn);
+            controls.appendChild(removeBtn);
+            item.appendChild(controls);
+
+            return item;
+        }
+
+        document.getElementById('add-task').addEventListener('click', () => {
+            const newTaskInput = document.getElementById('new-task');
+            const taskName = newTaskInput.value.trim();
+            if (taskName) {
+                const task = createTask(taskName);
+                todoItemsContainer.appendChild(task);
+                newTaskInput.value = '';
             }
         });
 
-        timerInput.addEventListener('input', () => {
-            startButton.disabled = !timerInput.value;
+        document.getElementById('new-task').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('add-task').click();
+            }
         });
 
-        startButton.addEventListener('click', () => {
-            let time = parseInt(timerInput.value);
-            if (isNaN(time) || time <= 0) return;
+        [timerList, todoItemsContainer].forEach(container => {
+            container.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+            });
 
-            startButton.disabled = true;
-            timerInput.disabled = true;
-            selectedTask.textContent = `Timer running for: ${draggedItem.textContent}`;
-
-            const countdown = setInterval(() => {
-                time--;
-                timerInput.value = time;
-
-                if (time <= 0) {
-                    clearInterval(countdown);
-                    selectedTask.textContent = `Timer done for: ${draggedItem.textContent}`;
-                    timerInput.disabled = false;
-                    alarmSound.play();
+            container.addEventListener('drop', (e) => {
+                e.preventDefault();
+                if (draggedItem) {
+                    const taskName = e.dataTransfer.getData('text/plain');
+                    
+                    if (container === timerList) {
+                        const timerItem = createTimerItem(taskName);
+                        timerList.appendChild(timerItem);
+                    } else {
+                        const newItem = createTask(taskName);
+                        todoItemsContainer.appendChild(newItem);
+                    }
                 }
-            }, 1000);
+            });
         });
+
+        startButton.addEventListener('click', startTimer);
+        pauseButton.addEventListener('click', pauseTimer);
+        resetButton.addEventListener('click', resetTimer);
     </script>
 </body>
 </html>
