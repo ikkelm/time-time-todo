@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>To-Do List with Timer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+        }
+        .todo-list, .timer {
+            border: 2px solid #ccc;
+            padding: 20px;
+            border-radius: 5px;
+            width: 45%;
+        }
+        .todo-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: #f4f4f4;
+            border: 1px solid #ddd;
+            cursor: grab;
+        }
+        .todo-item.dragging {
+            opacity: 0.5;
+        }
+        .timer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+            background: #f9f9f9;
+        }
+        .timer input {
+            width: 100px;
+            padding: 5px;
+            margin: 10px;
+            text-align: center;
+        }
+        button {
+            padding: 10px 20px;
+            margin-top: 10px;
+            border: none;
+            background: #007bff;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <h1>To-Do List with Timer</h1>
+    <div class="container">
+        <div class="todo-list">
+            <h2>To-Do List</h2>
+            <div class="todo-item" draggable="true">Task 1</div>
+            <div class="todo-item" draggable="true">Task 2</div>
+            <div class="todo-item" draggable="true">Task 3</div>
+        </div>
+        <div class="timer">
+            <h2>Timer</h2>
+            <p id="selected-task">Drag a task here</p>
+            <input type="number" id="timer-input" placeholder="Time (sec)" disabled>
+            <button id="start-button" disabled>Start Timer</button>
+        </div>
+    </div>
+
+    <audio id="alarm-sound" src="https://www.soundjay.com/button/beep-07.wav"></audio>
+
+    <script>
+        const todoItems = document.querySelectorAll('.todo-item');
+        const timerArea = document.querySelector('.timer');
+        const selectedTask = document.getElementById('selected-task');
+        const timerInput = document.getElementById('timer-input');
+        const startButton = document.getElementById('start-button');
+        const alarmSound = document.getElementById('alarm-sound');
+
+        let draggedItem = null;
+
+        todoItems.forEach(item => {
+            item.addEventListener('dragstart', () => {
+                draggedItem = item;
+                item.classList.add('dragging');
+            });
+
+            item.addEventListener('dragend', () => {
+                item.classList.remove('dragging');
+            });
+        });
+
+        timerArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+        });
+
+        timerArea.addEventListener('drop', () => {
+            if (draggedItem) {
+                selectedTask.textContent = draggedItem.textContent;
+                timerInput.disabled = false;
+                startButton.disabled = true;
+            }
+        });
+
+        timerInput.addEventListener('input', () => {
+            startButton.disabled = !timerInput.value;
+        });
+
+        startButton.addEventListener('click', () => {
+            let time = parseInt(timerInput.value);
+            if (isNaN(time) || time <= 0) return;
+
+            startButton.disabled = true;
+            timerInput.disabled = true;
+            selectedTask.textContent = `Timer running for: ${draggedItem.textContent}`;
+
+            const countdown = setInterval(() => {
+                time--;
+                timerInput.value = time;
+
+                if (time <= 0) {
+                    clearInterval(countdown);
+                    selectedTask.textContent = `Timer done for: ${draggedItem.textContent}`;
+                    timerInput.disabled = false;
+                    alarmSound.play();
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
